@@ -1,15 +1,17 @@
-﻿using Newtonsoft.Json;
+﻿using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Nop.Core;
 using Nop.Core.Domain.Messages;
 using Nop.Services.Common;
 using Nop.Services.Configuration;
 using Nop.Services.Localization;
-using Nop.Services.Logging;
-using Nop.Services.Messages;
 using Nop.Services.Plugins;
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Threading.Tasks;
 
 namespace Nop.Plugin.SMS.Net.bd
 {
@@ -18,35 +20,28 @@ namespace Nop.Plugin.SMS.Net.bd
     /// </summary>
     public class SmsNetBdProvider : BasePlugin, IMiscPlugin
     {
-        private readonly IEmailAccountService _emailAccountService;
-        private readonly ILocalizationService _localizationService;
-        private readonly ILogger _logger;
-        private readonly IQueuedEmailService _queuedEmailService;
-        private readonly ISettingService _settingService;
-        private readonly IStoreContext _storeContext;
-        private readonly IWebHelper _webHelper;
-        private readonly EmailAccountSettings _emailAccountSettings;
-        private readonly SmsNetBdSettings _AlphaSMSSettings;
+        private const string DefaultBaseUrl = "https://api.sms.net.bd/sendsms";
 
-        public SmsNetBdProvider(IEmailAccountService emailAccountService,
-            ILocalizationService localizationService,
-            ILogger logger,
-            IQueuedEmailService queuedEmailService,
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<SmsNetBdProvider> _logger;
+        private readonly ISettingService _settingService;
+        private readonly IWebHelper _webHelper;
+        private readonly SmsNetBdSettings _smsSettings;
+        protected readonly ILocalizationService _localizationService;
+
+        public SmsNetBdProvider(IHttpClientFactory httpClientFactory,
+            ILogger<SmsNetBdProvider> logger,
             ISettingService settingService,
-            IStoreContext storeContext,
             IWebHelper webHelper,
-            EmailAccountSettings emailAccountSettings,
-            SmsNetBdSettings AlphaSMSSettings)
+            SmsNetBdSettings smsSettings,
+            ILocalizationService localization)
         {
-            this._emailAccountService = emailAccountService;
-            this._localizationService = localizationService;
-            this._logger = logger;
-            this._queuedEmailService = queuedEmailService;
-            this._settingService = settingService;
-            this._storeContext = storeContext;
-            this._webHelper = webHelper;
-            this._emailAccountSettings = emailAccountSettings;
-            this._AlphaSMSSettings = AlphaSMSSettings;
+            _httpClientFactory = httpClientFactory;
+            _logger = logger;
+            _settingService = settingService;
+            _webHelper = webHelper;
+            _smsSettings = smsSettings;
+            _localizationService = localization;
         }
 
         /// <summary>
@@ -54,44 +49,49 @@ namespace Nop.Plugin.SMS.Net.bd
         /// </summary>
         /// <param name="text">SMS text</param>
         /// <returns>Result</returns>
-        public bool SendSms(string num, string meg, string sender_id = null)
+        public async Task<bool> SendSmsAsync(string number, string message, string? senderId = null)
         {
-            if (num != null)
+            if (string.IsNullOrWhiteSpace(number) || string.IsNullOrWhiteSpace(message))
+                return false;
+
+            if (string.IsNullOrWhiteSpace(_smsSettings.API_Key))
+                return false;
+
+            var baseUrl = string.IsNullOrWhiteSpace(_smsSettings.API_Url) ? DefaultBaseUrl : _smsSettings.API_Url.Trim();
+            baseUrl = baseUrl.TrimEnd('?');
+            var payload = new Dictionary<string, string>
             {
-                try
+                ["api_key"] = _smsSettings.API_Key,
+                ["msg"] = message,
+                ["to"] = number
+            };
+
+            var effectiveSender = !string.IsNullOrWhiteSpace(senderId) ? senderId : _smsSettings.sender_id;
+            if (!string.IsNullOrWhiteSpace(effectiveSender))
+                payload["sender_id"] = effectiveSender!;
+
+            try
+            {
+                var httpClient = _httpClientFactory.CreateClient(nameof(SmsNetBdProvider));
+                var requestUri = QueryHelpers.AddQueryString(baseUrl, payload);
+                using var response = await httpClient.GetAsync(requestUri).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
                 {
-                    using (var client = new HttpClient())
-                    {
-
-                        client.BaseAddress = new Uri(_AlphaSMSSettings.API_Url);
-                        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                        var response = client.GetAsync("?api_key=" + _AlphaSMSSettings.API_Key + "&msg=" + meg + "&to=" + num + "&sender_id=" + sender_id).Result;
-                        using (HttpContent content = response.Content)
-                        {
-                            var bkresult = content.ReadAsStringAsync().Result;
-                            dynamic stuff = JsonConvert.DeserializeObject(bkresult);
-                            if (stuff.error == "0")
-                            {
-                                return true;
-                            }
-                            else
-                            {
-                                return false;
-                            }
-
-                        }
-                    }
-
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex.Message, ex);
+                    _logger.LogWarning("sms.net.bd returned non-success status code {StatusCode}", response.StatusCode);
                     return false;
                 }
+
+                var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(content))
+                    return false;
+
+                var parsed = JsonConvert.DeserializeObject<JObject>(content);
+                var error = parsed?["error"]?.Value<string>();
+                return string.Equals(error, "0", StringComparison.OrdinalIgnoreCase);
             }
-            else
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Error sending SMS through sms.net.bd");
                 return false;
             }
         }
@@ -104,12 +104,12 @@ namespace Nop.Plugin.SMS.Net.bd
         /// <summary>
         /// Install plugin
         /// </summary>
-        public override void Install()
+        public override async Task InstallAsync()
         {
             //settings
             var settings = new SmsNetBdSettings
             {
-                API_Url = "https://api.sms.net.bd/sendsms?",
+                API_Url = DefaultBaseUrl,
                 Enabled = true,
                 EnabledConfirmOrder = true,
                 EnabledOrderCanceled = true,
@@ -117,10 +117,87 @@ namespace Nop.Plugin.SMS.Net.bd
                 EnabledOrderShipping = false,
                 EnabledPaymented = false,
                 EnabledRegistered = false,
-                ConfirmOrderSMSForCustomerFormat = "Your Order is Confirmed . Order ID is %[ID]%. Total Amount is %[OrderTotal]%. Please Pay Now. " + _storeContext.CurrentStore.Name
-            };
-            _settingService.SaveSetting(settings);
+                ConfirmOrderSMSForCustomerFormat = "Your Order is Confirmed. Order ID: %[ID]%. Total Amount: %[OrderTotal]%",
+                ConfirmOrderSMSForOwnerFormat = "%[StoreName]% Order is Placed #%[ID]% and Total Amount: %[OrderTotal]%",
+                OrderPaidSMSFormat = "[ %[StoreName]% ] We received your payment for order #{%[ID]%}",
+                OrderCanceledSMSFormat = "[ %[StoreName]% ]  Your order #{%[ID]%}status has been updated to Canceled.",
+                OrderRefundedSMSFormat = "[ %[StoreName]% ]  Order #{%[ID]%} has been refunded.",
+                OrderShippingSMSFormat = "[ %[StoreName]% ]  Order #{%[ID]%} has been %[ShippingStatus]%"
 
+
+            };
+            await _settingService.SaveSettingAsync(settings).ConfigureAwait(false);
+            await _localizationService.AddOrUpdateLocaleResourceAsync(new Dictionary<string, string>
+            {
+                ["Plugins.SMS.Net.bd.Fields.Api_Url"] = "API URL",
+                ["Plugins.SMS.Net.bd.Fields.Api_Url.Hint"] = "The SMS provider’s API endpoint. Example: https://api.sms.net.bd/sendsms",
+
+                ["Plugins.SMS.Net.bd.Fields.API_Key"] = "API Key",
+                ["Plugins.SMS.Net.bd.Fields.API_Key.Hint"] = "Enter the API key provided by your service provider.",
+
+                ["Plugins.SMS.Net.bd.Fields.Enabled"] = "Enable Plugin",
+                ["Plugins.SMS.Net.bd.Fields.Enabled.Hint"] = "Check to enable the SMS.Net.bd plugin. If unchecked, the plugin will be disabled.",
+
+                ["Plugins.SMS.Net.bd.Fields.sender_id"] = "Sender ID",
+                ["Plugins.SMS.Net.bd.Fields.sender_id.Hint"] = "The sender ID (masking) registered with your SMS provider.",
+
+                ["Plugins.SMS.Net.bd.Fields.CustomerEnabled"] = "Customer SMS Enabled",
+                ["Plugins.SMS.Net.bd.Fields.CustomerEnabled.Hint"] = "If checked, customers will receive SMS notifications for order events.",
+
+                ["Plugins.SMS.Net.bd.Fields.OwnerEnabled"] = "Owner SMS Enabled",
+                ["Plugins.SMS.Net.bd.Fields.OwnerEnabled.Hint"] = "If checked, the store owner will receive SMS notifications for order events.",
+
+                ["Plugins.SMS.Net.bd.Fields.OwnerNumber"] = "Owner Number",
+                ["Plugins.SMS.Net.bd.Fields.OwnerNumber.Hint"] = "Enter the mobile number(s) where the store owner should receive SMS alerts.",
+
+                ["Plugins.SMS.Net.bd.Fields.EnabledConfirmOrder"] = "Enable Confirm Order",
+                ["Plugins.SMS.Net.bd.Fields.EnabledConfirmOrder.Hint"] = "If enabled, SMS messages will be sent when an order is confirmed.",
+
+                ["Plugins.SMS.Net.bd.Fields.SendToCustomerConfirmOrderSMSEnabled"] = "Customer Confirm Order SMS Enabled",
+                ["Plugins.SMS.Net.bd.Fields.SendToCustomerConfirmOrderSMSEnabled.Hint"] = "If enabled, SMS messages will be sent when an order is confirmed.",
+
+                ["Plugins.SMS.Net.bd.Fields.ConfirmOrderSMSForCustomerFormat"] = "Customer Confirm Order SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.ConfirmOrderSMSForCustomerFormat.Hint"] = "Template for SMS sent to store customer on order confirmation.",
+
+                ["Plugins.SMS.Net.bd.Fields.EnableOrderPaid"] = "Enable Order Paid",
+                ["Plugins.SMS.Net.bd.Fields.EnableOrderPaid.Hint"] = "If enabled, SMS messages will be sent when an order payment is received.",
+
+                ["Plugins.SMS.Net.bd.Fields.OrderPaidSMSFormat"] = "Order Paid SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.OrderPaidSMSFormat.Hint"] = "Template for SMS sent when an order is paid.",
+
+                ["Plugins.SMS.Net.bd.Fields.EnabledOrderCanceled"] = "Enable Order Canceled",
+                ["Plugins.SMS.Net.bd.Fields.EnabledOrderCanceled.Hint"] = "If enabled, SMS messages will be sent when an order is canceled.",
+
+                ["Plugins.SMS.Net.bd.Fields.OrderCanceledSMSFormat"] = "Order Canceled SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.OrderCanceledSMSFormat.Hint"] = "Template for SMS sent when an order is canceled.",
+
+                ["Plugins.SMS.Net.bd.Fields.EnableOrderRefunded"] = "Enable Order Refunded",
+                ["Plugins.SMS.Net.bd.Fields.EnableOrderRefunded.Hint"] = "If enabled, SMS messages will be sent when an order is refunded.",
+
+                ["Plugins.SMS.Net.bd.Fields.OrderRefundedSMSFormat"] = "Order Refunded SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.OrderRefundedSMSFormat.Hint"] = "Template for SMS sent when an order is refunded.",
+
+                ["Plugins.SMS.Net.bd.Fields.EnabledOrderShipping"] = "Enable Order Shipping",
+                ["Plugins.SMS.Net.bd.Fields.EnabledOrderShipping.Hint"] = "If enabled, SMS messages will be sent when an order is shipped.",
+
+                ["Plugins.SMS.Net.bd.Fields.OrderShippingSMSFormat"] = "Order Shipping SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.OrderShippingSMSFormat.Hint"] = "Template for SMS sent when an order is shipped. Use tokens like %{ShippingStatus}%.",
+
+                ["Plugins.SMS.Net.bd.Fields.SendToCustomerAccRegSMSEnabled"] = "Customer Confirm Order SMS Enable",
+                ["Plugins.SMS.Net.bd.Fields.SendToCustomerAccRegSMSEnabled.Hint"] = "If enabled, SMS messages will be sent when an order is confirmed.",
+
+                ["Plugins.SMS.Net.bd.Fields.SendToOwnerConfirmOrderSMSEnabled"] = "Owner Confirm Order SMS Enabled",
+                ["Plugins.SMS.Net.bd.Fields.SendToOwnerConfirmOrderSMSEnabled.Hint"] = "If enabled, SMS messages will be sent when an order is confirmed.",
+
+                ["Plugins.SMS.Net.bd.Fields.ConfirmOrderSMSForOwnerFormat"] = "Owner Confirm Order SMS Format",
+                ["Plugins.SMS.Net.bd.Fields.ConfirmOrderSMSForOwnerFormat.Hint"] = "Template for SMS sent to store owner on order confirmation.",
+
+                ["Plugins.SMS.Net.bd.Fields.TestMessage"] = "Message text",
+                ["Plugins.SMS.Net.bd.Fields.TestMessage.Hint"] = "Enter the message text that will be used for sending a test SMS.",
+
+                ["Plugins.SMS.Net.bd.Fields.Number"] = "Number",
+                ["Plugins.SMS.Net.bd.Fields.Number.Hint"] = "Enter the recipient phone number for the test SMS."
+            });
             //locales
             //_localizationService.AddOrUpdatePluginLocaleResource("Plugins.Sms.Alpha.TestFailed", "Test message sending failed");
             //_localizationService.AddOrUpdatePluginLocaleResource("Plugins.Sms.Alpha.TestSuccess", "Test message was sent (queued)");
@@ -133,16 +210,16 @@ namespace Nop.Plugin.SMS.Net.bd
             //_localizationService.AddOrUpdatePluginLocaleResource("Plugins.Sms.Alpha.SendTest", "Send");
             //_localizationService.AddOrUpdatePluginLocaleResource("Plugins.Sms.Alpha.SendTest.Hint", "Send test message");
 
-            base.Install();
+            await base.InstallAsync().ConfigureAwait(false);
         }
 
         /// <summary>
         /// Uninstall plugin
         /// </summary>
-        public override void Uninstall()
+        public override async Task UninstallAsync()
         {
             //settings
-            _settingService.DeleteSetting<SmsNetBdSettings>();
+            await _settingService.DeleteSettingAsync<SmsNetBdSettings>().ConfigureAwait(false);
 
             //locales
             //_localizationService.DeletePluginLocaleResource("Plugins.Sms.Alpha.TestFailed");
@@ -156,7 +233,7 @@ namespace Nop.Plugin.SMS.Net.bd
             //_localizationService.DeletePluginLocaleResource("Plugins.Sms.Alpha.SendTest");
             //_localizationService.DeletePluginLocaleResource("Plugins.Sms.Alpha.SendTest.Hint");
 
-            base.Uninstall();
+            await base.UninstallAsync().ConfigureAwait(false);
         }
     }
 }

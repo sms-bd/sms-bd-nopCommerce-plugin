@@ -2,8 +2,10 @@
   "Group": "SMS providers",
   "FriendlyName": "sms.net.bd",
   "SystemName": "Mobile.sms.net.bd",
-  "Version": "1.0",
-  "SupportedVersions": [ "4.30" ],
+  "Version": "4.80",
+  "SupportedVersions": [
+    "4.80"
+  ],
   "Author": "sms.net.bd team",
   "DisplayOrder": 1,
   "FileName": "Nop.Plugin.SMS.Net.bd.dll",

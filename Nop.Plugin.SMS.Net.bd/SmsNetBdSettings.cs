@@ -31,6 +31,7 @@ namespace Nop.Plugin.SMS.Net.bd
         //registered
         public bool EnabledRegistered { get; set; }
         public string RegisteredSMSFormat { get; set; }
+        public bool EnableOrderStatusChanged { get; set; }
 
         //ConfirmOrder
         public bool EnabledConfirmOrder { get; set; }

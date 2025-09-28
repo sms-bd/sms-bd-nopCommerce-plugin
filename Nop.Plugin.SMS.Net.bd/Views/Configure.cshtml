@@ -1,25 +1,24 @@
-﻿@{
-    Layout = "_ConfigurePlugin";
-
-    //Html.AddCssFileParts("~/Plugins/SMS.Messaging/Content/styles.css");
-}
-@model SmsNetBdModel
+﻿@model SmsNetBdModel
 @using Nop.Core.Infrastructure
 @using Nop.Plugin.Sms.Net.bd.Models;
 @using Nop.Web.Framework;
 @using Nop.Web.Framework.UI;
 @inject Nop.Core.Domain.Common.AdminAreaSettings adminAreaSettings
+@{
+    Layout = "_ConfigurePlugin";
 
+    //Html.AddCssFileParts("~/Plugins/SMS.Messaging/Content/styles.css");
+}
 <form asp-controller="SmsNetBd" asp-action="Configure" method="post">
-    <div class="panel-group">
-        <div class="panel panel-default">
-            <div class="panel-body">
-                <div class="form-group">
+    <div class="cards-group">
+        <div class="card card-default">
+            <div class="card-body">
+                <div class="form-group row">
                     <div class="col-md-3">
                         Basic Setting
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="Enabled" />
                     </div>
@@ -28,7 +27,7 @@
                         <span asp-validation-for="Enabled"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="API_Url" />
                     </div>
@@ -37,7 +36,7 @@
                         <span asp-validation-for="API_Url"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="API_Key" />
                     </div>
@@ -46,7 +45,7 @@
                         <span asp-validation-for="API_Key"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="sender_id" />
                     </div>
@@ -55,7 +54,7 @@
                         <span asp-validation-for="sender_id"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                @* <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="CustomerEnabled" />
                     </div>
@@ -63,8 +62,8 @@
                         <nop-editor asp-for="CustomerEnabled" />
                         <span asp-validation-for="CustomerEnabled"></span>
                     </div>
-                </div>
-                <div class="form-group">
+                </div> *@
+                @* <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OwnerEnabled" />
                     </div>
@@ -72,8 +71,8 @@
                         <nop-editor asp-for="OwnerEnabled" />
                         <span asp-validation-for="OwnerEnabled"></span>
                     </div>
-                </div>
-                <div class="form-group">
+                </div> *@
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OwnerNumber" />
                     </div>
@@ -82,7 +81,7 @@
                         <span asp-validation-for="OwnerNumber"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         Event Setting
                     </div>
@@ -186,7 +185,7 @@
                         <span asp-validation-for="RegisteredSMSFormat"></span>
                     </div>
                 </div> *@
-                <div class="form-group">
+                @* <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="EnabledConfirmOrder" />
                     </div>
@@ -194,8 +193,8 @@
                         <nop-editor asp-for="EnabledConfirmOrder" />
                         <span asp-validation-for="EnabledConfirmOrder"></span>
                     </div>
-                </div>
-                <div class="form-group">
+                </div> *@
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="SendToCustomerConfirmOrderSMSEnabled" />
                     </div>
@@ -204,7 +203,7 @@
                         <span asp-validation-for="SendToCustomerConfirmOrderSMSEnabled"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="ConfirmOrderSMSForCustomerFormat" />
                     </div>
@@ -214,7 +213,7 @@
                         <span class="help-block"> %[ID]% | %[StoreName]% | %[OwnerPhoneNumber]% | %[CustomerPhoneNumber]% | %[CustomerFirstName]% | %[OrderTotal]% </span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="SendToOwnerConfirmOrderSMSEnabled" />
                     </div>
@@ -223,7 +222,7 @@
                         <span asp-validation-for="SendToOwnerConfirmOrderSMSEnabled"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="ConfirmOrderSMSForOwnerFormat" />
                     </div>
@@ -234,7 +233,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="EnableOrderPaid" />
                     </div>
@@ -243,7 +242,7 @@
                         <span asp-validation-for="EnableOrderPaid"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OrderPaidSMSFormat" />
                     </div>
@@ -254,7 +253,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="EnabledOrderCanceled" />
                     </div>
@@ -263,7 +262,7 @@
                         <span asp-validation-for="EnabledOrderCanceled"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OrderCanceledSMSFormat" />
                     </div>
@@ -275,7 +274,7 @@
                 </div>
 
 
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="EnableOrderRefunded" />
                     </div>
@@ -284,7 +283,7 @@
                         <span asp-validation-for="EnableOrderRefunded"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OrderRefundedSMSFormat" />
                     </div>
@@ -294,7 +293,7 @@
                         <span class="help-block"> %[ID]% | %[StoreName]% | %[OwnerPhoneNumber]% | %[CustomerPhoneNumber]% | %[CustomerFirstName]% | %[OrderTotal]% </span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="EnabledOrderShipping" />
                     </div>
@@ -304,7 +303,7 @@
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="OrderShippingSMSFormat" />
                     </div>
@@ -385,7 +384,7 @@
                     </div>
                     </div>*@
 
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         &nbsp;
                     </div>
@@ -397,13 +396,13 @@
         </div>
     </div>
 
-    <div class="panel-group">
-        <div class="panel panel-default">
-            <div class="panel-heading">
-                @T("Plugins.Sms.Net.bd.SendTest.Hint")
+    <div class="cards-group">
+        <div class="card card-default">
+            <div class="card-header">
+               Send test message
             </div>
-            <div class="panel-body">
-                <div class="form-group">
+            <div class="card-body">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="TestMessage" />
                     </div>
@@ -412,7 +411,7 @@
                         <span asp-validation-for="TestMessage"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         <nop-label asp-for="Number" />
                     </div>
@@ -421,12 +420,12 @@
                         <span asp-validation-for="Number"></span>
                     </div>
                 </div>
-                <div class="form-group">
+                <div class="form-group row">
                     <div class="col-md-3">
                         &nbsp;
                     </div>
                     <div class="col-md-9">
-                        <input type="submit" name="test-sms" class="k-button" value="@T("Plugins.Sms.Net.bd.SendTest")" />
+                        <input type="submit" name="test-sms" class="k-button" value="Send" />
                     </div>
                 </div>
             </div>

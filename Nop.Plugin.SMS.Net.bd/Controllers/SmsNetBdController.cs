@@ -9,12 +9,12 @@ using Nop.Services.Security;
 using Nop.Web.Framework;
 using Nop.Web.Framework.Controllers;
 using Nop.Web.Framework.Mvc.Filters;
-using System;
+using Nop.Services.Orders;
 
 namespace Nop.Plugin.Sms.Net.bd.Controllers
 {
     [AuthorizeAdmin]
-    [Area(AreaNames.Admin)]
+    [Area(AreaNames.ADMIN)]
     public class SmsNetBdController : BasePluginController
     {
         private readonly ILocalizationService _localizationService;
@@ -23,6 +23,7 @@ namespace Nop.Plugin.Sms.Net.bd.Controllers
         private readonly ISettingService _settingService;
         private readonly SmsNetBdSettings _AlphaSettings;
         private readonly INotificationService _notificationService;
+        private readonly IOrderService _senderService;
 
         public SmsNetBdController(ILocalizationService localizationService,
             IPermissionService permissionService,
@@ -39,18 +40,16 @@ namespace Nop.Plugin.Sms.Net.bd.Controllers
             _notificationService = notificationService;
 
         }
-
-        public IActionResult Configure()
+        [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+        public async Task<IActionResult> Configure()
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePlugins))
-                return AccessDeniedView();
 
             var model = new SmsNetBdModel
             {
                 Enabled = _AlphaSettings.Enabled,
                 Email = _AlphaSettings.Email,
                 API_Key = _AlphaSettings.API_Key,
-                API_Url = _AlphaSettings.API_Url==null? "https://api.sms.net.bd/sendsms?":_AlphaSettings.API_Url,
+                API_Url = string.IsNullOrWhiteSpace(_AlphaSettings.API_Url) ? "https://api.sms.net.bd/sendsms" : _AlphaSettings.API_Url,
                 //ConfirmOrderSMSFormat = _AlphaSettings.ConfirmOrderSMSFormat,
                 EnabledConfirmOrder = _AlphaSettings.EnabledConfirmOrder,
                 EnabledOrderCanceled = _AlphaSettings.EnabledOrderCanceled,
@@ -86,14 +85,13 @@ namespace Nop.Plugin.Sms.Net.bd.Controllers
 
         [HttpPost, ActionName("Configure")]
         [FormValueRequired("save")]
-        public IActionResult ConfigurePOST(SmsNetBdModel model)
+        [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+        public async Task<IActionResult> ConfigurePOST(SmsNetBdModel model)
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePlugins))
-                return AccessDeniedView();
 
             if (!ModelState.IsValid)
             {
-                return Configure();
+                return await Configure();
             }
 
             //save settings
@@ -132,47 +130,44 @@ namespace Nop.Plugin.Sms.Net.bd.Controllers
             _AlphaSettings.ConfirmOrderSMSForOwnerFormat = model.ConfirmOrderSMSForOwnerFormat;
             _AlphaSettings.OrderRefundedSMSFormat = model.OrderRefundedSMSFormat;
             _AlphaSettings.OrderPaidSMSFormat = model.OrderPaidSMSFormat;
-            _settingService.SaveSetting(_AlphaSettings);
+            await _settingService.SaveSettingAsync(_AlphaSettings).ConfigureAwait(false);
 
-            // SuccessNotification(_localizationService.GetResource("Admin.Plugins.Saved"));
-            _notificationService.SuccessNotification(_localizationService.GetResource("Admin.Plugins.Saved"));
+            var savedMessage = await _localizationService.GetResourceAsync("Admin.Plugins.Saved").ConfigureAwait(false);
+            _notificationService.SuccessNotification(savedMessage);
 
-            return Configure();
+            return await Configure();
         }
 
         [HttpPost, ActionName("Configure")]
         [FormValueRequired("test-sms")]
-        public IActionResult TestSms(SmsNetBdModel model)
+        [CheckPermission(StandardPermission.Configuration.MANAGE_PLUGINS)]
+        public async Task<IActionResult> TestSms(SmsNetBdModel model)
         {
-            if (!_permissionService.Authorize(StandardPermissionProvider.ManagePlugins))
-                return AccessDeniedView();
 
             try
             {
-                if (string.IsNullOrEmpty(model.TestMessage))
+                if (string.IsNullOrWhiteSpace(model.TestMessage) || string.IsNullOrWhiteSpace(model.Number))
                 {
                     //ErrorNotification("Enter test message");
-                    _notificationService.ErrorNotification("Enter test message");
+                    _notificationService.ErrorNotification("Enter test message and phone number");
                 }
                 else
                 {
-                    var pluginDescriptor = _pluginFinder.GetPluginDescriptorBySystemName<IPlugin>("Mobile.sms.net.bd", LoadPluginsMode.All);
-                    //_pluginFinder.GetPluginDescriptorBySystemName("Mobile.SMS.Alpha");
+                    var pluginDescriptor = await _pluginFinder.GetPluginDescriptorBySystemNameAsync<IPlugin>("Mobile.sms.net.bd", LoadPluginsMode.All);
                     if (pluginDescriptor == null)
-                        throw new Exception("Cannot load the plugin");
+                        throw new InvalidOperationException("Cannot load the plugin.");
                     var plugin = pluginDescriptor.Instance<IPlugin>() as SmsNetBdProvider;
-                    if (plugin == null)
-                        throw new Exception("Cannot load the plugin");
-
-                    if (plugin.SendSms(model.Number, model.TestMessage))
+                    if (await plugin.SendSmsAsync(model.Number, model.TestMessage, _AlphaSettings.sender_id).ConfigureAwait(false))
                     {
-                        _notificationService.SuccessNotification(_localizationService.GetResource("Plugins.Sms.Net.bd.TestSuccess"));
+                        var successMessage = await _localizationService.GetResourceAsync("Plugins.Sms.Net.bd.TestSuccess").ConfigureAwait(false);
+                        _notificationService.SuccessNotification(successMessage);
 
                     }
                     else
                     {
 
-                        _notificationService.ErrorNotification(_localizationService.GetResource("Plugins.Sms.Net.bd.TestFailed"));
+                        var failureMessage = await _localizationService.GetResourceAsync("Plugins.Sms.Net.bd.TestFailed").ConfigureAwait(false);
+                        _notificationService.ErrorNotification(failureMessage);
                     }
                 }
             }
