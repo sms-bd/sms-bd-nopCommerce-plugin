@@ -1,1 +1,1 @@
-# sms-net-bd-nopCommerce-plugin
+# sms-bd-nopCommerce-plugin
